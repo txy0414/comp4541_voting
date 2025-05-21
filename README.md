@@ -8,6 +8,9 @@ Steps:
 2. Copy the deployed contract address and replace the address in the html file (Search // Replace with your deployed contract address // in the file.)
 3. Open the html file on Chrome and it will work.
 
+## Youtube link for live demo
+https://youtu.be/tKZScCey2-w 
+
 ## Link
 https://txy0414.github.io/comp4541_voting/
 
