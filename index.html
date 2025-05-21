@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voting Smart Contract Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.0/dist/web3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.6/babel.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        function VotingApp() {
+            const [web3, setWeb3] = React.useState(null);
+            const [contract, setContract] = React.useState(null);
+            const [account, setAccount] = React.useState(null);
+            const [proposal, setProposal] = React.useState({ name: '', optionA: '', optionB: '', optionACount: 0, optionBCount: 0 });
+            const [state, setState] = React.useState('Created');
+            const [totalVoters, setTotalVoters] = React.useState(0);
+            const [messages, setMessages] = React.useState([]);
+            const [viewResults, setViewResults] = React.useState({}); // State for view function results
+
+            // Input states
+            const [proposalName, setProposalName] = React.useState('');
+            const [optionA, setOptionA] = React.useState('');
+            const [optionB, setOptionB] = React.useState('');
+            const [voterAddress, setVoterAddress] = React.useState('');
+            const [vote, setVote] = React.useState(true);
+            const [checkVoterAddress, setCheckVoterAddress] = React.useState('');
+
+            // Contract ABI
+            const contractABI = [
+                {
+                    "inputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "constructor"
+                },
+                {
+                    "anonymous": false,
+                    "inputs": [
+                        {
+                            "indexed": true,
+                            "internalType": "address",
+                            "name": "voter",
+                            "type": "address"
+                        }
+                    ],
+                    "name": "VoterRegistered",
+                    "type": "event"
+                },
+                {
+                    "anonymous": false,
+                    "inputs": [
+                        {
+                            "indexed": false,
+                            "internalType": "string",
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "indexed": false,
+                            "internalType": "string",
+                            "name": "optionA",
+                            "type": "string"
+                        },
+                        {
+                            "indexed": false,
+                            "internalType": "string",
+                            "name": "optionB",
+                            "type": "string"
+                        }
+                    ],
+                    "name": "ProposalDetailsSet",
+                    "type": "event"
+                },
+                {
+                    "anonymous": false,
+                    "inputs": [],
+                    "name": "VotingStarted",
+                    "type": "event"
+                },
+                {
+                    "anonymous": false,
+                    "inputs": [
+                        {
+                            "indexed": true,
+                            "internalType": "address",
+                            "name": "voter",
+                            "type": "address"
+                        },
+                        {
+                            "indexed": false,
+                            "internalType": "bool",
+                            "name": "vote",
+                            "type": "bool"
+                        }
+                    ],
+                    "name": "VoteCommitted",
+                    "type": "event"
+                },
+                {
+                    "anonymous": false,
+                    "inputs": [
+                        {
+                            "indexed": false,
+                            "internalType": "uint256",
+                            "name": "optionACount",
+                            "type": "uint256"
+                        },
+                        {
+                            "indexed": false,
+                            "internalType": "uint256",
+                            "name": "optionBCount",
+                            "type": "uint256"
+                        },
+                        {
+                            "indexed": false,
+                            "internalType": "bool",
+                            "name": "automatic",
+                            "type": "bool"
+                        }
+                    ],
+                    "name": "VotingEnded",
+                    "type": "event"
+                },
+                {
+                    "anonymous": false,
+                    "inputs": [],
+                    "name": "VotingRestarted",
+                    "type": "event"
+                },
+                {
+                    "inputs": [],
+                    "name": "owner",
+                    "outputs": [
+                        {
+                            "internalType": "address",
+                            "name": "",
+                            "type": "address"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "renounceOwnership",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [
+                        {
+                            "internalType": "address",
+                            "name": "newOwner",
+                            "type": "address"
+                        }
+                    ],
+                    "name": "transferOwnership",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [
+                        {
+                            "internalType": "bool",
+                            "name": "_vote",
+                            "type": "bool"
+                        }
+                    ],
+                    "name": "commitVote",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "endVoting",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "getMessages",
+                    "outputs": [
+                        {
+                            "internalType": "string[]",
+                            "name": "",
+                            "type": "string[]"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "getOwnVote",
+                    "outputs": [
+                        {
+                            "internalType": "bool",
+                            "name": "",
+                            "type": "bool"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "getProposal",
+                    "outputs": [
+                        {
+                            "internalType": "string",
+                            "name": "name",
+                            "type": "string"
+                        },
+                        {
+                            "internalType": "string",
+                            "name": "optionA",
+                            "type": "string"
+                        },
+                        {
+                            "internalType": "string",
+                            "name": "optionB",
+                            "type": "string"
+                        },
+                        {
+                            "internalType": "uint256",
+                            "name": "optionACount",
+                            "type": "uint256"
+                        },
+                        {
+                            "internalType": "uint256",
+                            "name": "optionBCount",
+                            "type": "uint256"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "getState",
+                    "outputs": [
+                        {
+                            "internalType": "string",
+                            "name": "",
+                            "type": "string"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "getTotalEligibleVoters",
+                    "outputs": [
+                        {
+                            "internalType": "uint256",
+                            "name": "",
+                            "type": "uint256"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [
+                        {
+                            "internalType": "address",
+                            "name": "_voter",
+                            "type": "address"
+                        }
+                    ],
+                    "name": "hasVoted",
+                    "outputs": [
+                        {
+                            "internalType": "bool",
+                            "name": "",
+                            "type": "bool"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [
+                        {
+                            "internalType": "address",
+                            "name": "_voter",
+                            "type": "address"
+                        }
+                    ],
+                    "name": "isVoterRegistered",
+                    "outputs": [
+                        {
+                            "internalType": "bool",
+                            "name": "",
+                            "type": "bool"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [
+                        {
+                            "internalType": "address",
+                            "name": "_voter",
+                            "type": "address"
+                        }
+                    ],
+                    "name": "registerVoter",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "restartVoting",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [
+                        {
+                            "internalType": "string",
+                            "name": "_proposalName",
+                            "type": "string"
+                        },
+                        {
+                            "internalType": "string",
+                            "name": "_optionA",
+                            "type": "string"
+                        },
+                        {
+                            "internalType": "string",
+                            "name": "_optionB",
+                            "type": "string"
+                        }
+                    ],
+                    "name": "setProposalDetails",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "startVoting",
+                    "outputs": [],
+                    "stateMutability": "nonpayable",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "state",
+                    "outputs": [
+                        {
+                            "internalType": "enum Voting.State",
+                            "name": "",
+                            "type": "uint8"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "totalVoters",
+                    "outputs": [
+                        {
+                            "internalType": "uint256",
+                            "name": "",
+                            "type": "uint256"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                },
+                {
+                    "inputs": [],
+                    "name": "votedCount",
+                    "outputs": [
+                        {
+                            "internalType": "uint256",
+                            "name": "",
+                            "type": "uint256"
+                        }
+                    ],
+                    "stateMutability": "view",
+                    "type": "function"
+                }
+            ];
+
+            // Replace with your deployed contract address
+            const contractAddress = '0x13DCFc81a86C70bC26dCc3baC5714D8eFF98f07E';
+
+            const connectWallet = async () => {
+                if (window.ethereum) {
+                    const web3Instance = new Web3(window.ethereum);
+                    setWeb3(web3Instance);
+                    try {
+                        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                        setAccount(accounts[0]);
+                        const contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
+                        setContract(contractInstance);
+                        updateContractData(contractInstance);
+                        setViewResults(prev => ({ ...prev, connectWallet: 'Wallet connected successfully' }));
+                    } catch (error) {
+                        console.error('Error connecting wallet:', error);
+                        setViewResults(prev => ({ ...prev, connectWallet: 'Error: ' + error.message }));
+                    }
+                } else {
+                    setViewResults(prev => ({ ...prev, connectWallet: 'Error: Please install MetaMask!' }));
+                }
+            };
+
+            async function updateContractData(contractInstance) {
+                try {
+                    const state = await contractInstance.methods.getState().call();
+                    setState(state);
+                    const voters = await contractInstance.methods.getTotalEligibleVoters().call();
+                    setTotalVoters(voters);
+                    const messages = await contractInstance.methods.getMessages().call();
+                    setMessages(messages);
+                    if (state === 'Voting' || state === 'Ended') {
+                        const proposalData = await contractInstance.methods.getProposal().call();
+                        setProposal({
+                            name: proposalData[0],
+                            optionA: proposalData[1],
+                            optionB: proposalData[2],
+                            optionACount: parseInt(proposalData[3]),
+                            optionBCount: parseInt(proposalData[4])
+                        });
+                    } else {
+                        // Reset proposal state when in Created state
+                        setProposal({
+                            name: '',
+                            optionA: '',
+                            optionB: '',
+                            optionACount: 0,
+                            optionBCount: 0
+                        });
+                    }
+                } catch (error) {
+                    console.error('Error updating contract data:', error);
+                    setViewResults(prev => ({ ...prev, error: 'Error updating contract data: ' + error.message }));
+                }
+            }
+
+            const handleSetProposalDetails = async () => {
+                if (!contract || !account) return;
+                try {
+                    await contract.methods.setProposalDetails(proposalName, optionA, optionB)
+                        .send({ from: account });
+                    updateContractData(contract);
+                    setViewResults(prev => ({ ...prev, setProposalDetails: 'Proposal details set successfully' }));
+                } catch (error) {
+                    console.error('Error setting proposal details:', error);
+                    setViewResults(prev => ({ ...prev, setProposalDetails: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleRegisterVoter = async () => {
+                if (!contract || !account) return;
+                try {
+                    await contract.methods.registerVoter(voterAddress).send({ from: account });
+                    updateContractData(contract);
+                    setViewResults(prev => ({ ...prev, registerVoter: 'Voter registered successfully' }));
+                } catch (error) {
+                    console.error('Error registering voter:', error);
+                    setViewResults(prev => ({ ...prev, registerVoter: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleStartVoting = async () => {
+                if (!contract || !account) return;
+                try {
+                    await contract.methods.startVoting().send({ from: account });
+                    updateContractData(contract);
+                    setViewResults(prev => ({ ...prev, startVoting: 'Voting started successfully' }));
+                } catch (error) {
+                    console.error('Error starting voting:', error);
+                    setViewResults(prev => ({ ...prev, startVoting: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleCommitVote = async () => {
+                if (!contract || !account) return;
+                try {
+                    await contract.methods.commitVote(vote).send({ from: account });
+                    updateContractData(contract);
+                    setViewResults(prev => ({ ...prev, commitVote: 'Vote committed successfully' }));
+                } catch (error) {
+                    console.error('Error committing vote:', error);
+                    setViewResults(prev => ({ ...prev, commitVote: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleEndVoting = async () => {
+                if (!contract || !account) return;
+                try {
+                    await contract.methods.endVoting().send({ from: account });
+                    updateContractData(contract);
+                    setViewResults(prev => ({ ...prev, endVoting: 'Voting ended successfully' }));
+                } catch (error) {
+                    console.error('Error ending voting:', error);
+                    setViewResults(prev => ({ ...prev, endVoting: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleRestartVoting = async () => {
+                if (!contract || !account) return;
+                try {
+                    await contract.methods.restartVoting().send({ from: account });
+                    updateContractData(contract);
+                    setViewResults(prev => ({ ...prev, restartVoting: 'Voting restarted successfully' }));
+                } catch (error) {
+                    console.error('Error restarting voting:', error);
+                    setViewResults(prev => ({ ...prev, restartVoting: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleGetProposal = async () => {
+                if (!contract) return;
+                try {
+                    const proposalData = await contract.methods.getProposal().call();
+                    setViewResults(prev => ({
+                        ...prev,
+                        getProposal: `Name: ${proposalData[0]}, Option A: ${proposalData[1]} (${proposalData[3]}), Option B: ${proposalData[2]} (${proposalData[4]})`
+                    }));
+                } catch (error) {
+                    console.error('Error getting proposal:', error);
+                    setViewResults(prev => ({ ...prev, getProposal: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleGetState = async () => {
+                if (!contract) return;
+                try {
+                    const state = await contract.methods.getState().call();
+                    setViewResults(prev => ({ ...prev, getState: `Current State: ${state}` }));
+                } catch (error) {
+                    console.error('Error getting state:', error);
+                    setViewResults(prev => ({ ...prev, getState: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleGetTotalEligibleVoters = async () => {
+                if (!contract) return;
+                try {
+                    const voters = await contract.methods.getTotalEligibleVoters().call();
+                    setViewResults(prev => ({ ...prev, getTotalEligibleVoters: `Total Eligible Voters: ${voters}` }));
+                } catch (error) {
+                    console.error('Error getting total voters:', error);
+                    setViewResults(prev => ({ ...prev, getTotalEligibleVoters: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleIsVoterRegistered = async () => {
+                if (!contract) return;
+                try {
+                    const isRegistered = await contract.methods.isVoterRegistered(checkVoterAddress).call();
+                    setViewResults(prev => ({ ...prev, isVoterRegistered: `Voter ${checkVoterAddress} Registered: ${isRegistered}` }));
+                } catch (error) {
+                    console.error('Error checking voter registration:', error);
+                    setViewResults(prev => ({ ...prev, isVoterRegistered: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleHasVoted = async () => {
+                if (!contract) return;
+                try {
+                    const hasVoted = await contract.methods.hasVoted(checkVoterAddress).call();
+                    setViewResults(prev => ({ ...prev, hasVoted: `Voter ${checkVoterAddress} Has Voted: ${hasVoted}` }));
+                } catch (error) {
+                    console.error('Error checking if voter has voted:', error);
+                    setViewResults(prev => ({ ...prev, hasVoted: 'Error: ' + error.message }));
+                }
+            };
+
+            const handleGetOwnVote = async () => {
+                if (!contract || !account) return;
+                try {
+                    const ownVote = await contract.methods.getOwnVote().call({ from: account });
+                    setViewResults(prev => ({ ...prev, getOwnVote: `Your Vote: ${ownVote ? proposal.optionA : proposal.optionB}` }));
+                } catch (error) {
+                    console.error('Error getting own vote:', error);
+                    setViewResults(prev => ({ ...prev, getOwnVote: 'Error: ' + error.message }));
+                }
+            };
+
+            // Combine contract messages and viewResults messages for display
+            const allMessages = [
+                ...messages,
+                ...Object.values(viewResults).filter(msg => typeof msg === 'string')
+            ];
+
+            return (
+                <div className="container mx-auto p-6 bg-white rounded-lg shadow-lg max-w-3xl">
+                    <h1 className="text-3xl font-bold mb-6 text-center">Voting DApp</h1>
+                    
+                    {/* Connect Wallet */}
+                    <div className="mb-6">
+                        <button
+                            onClick={connectWallet}
+                            className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 w-full"
+                        >
+                            {account ? `Connected: ${account.slice(0, 6)}...${account.slice(-4)}` : 'Connect Wallet'}
+                        </button>
+                    </div>
+
+                    {/* Contract Information */}
+                    <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">Contract Information</h2>
+                        <div className="bg-gray-100 p-4 rounded">
+                            <p><strong>Proposal Name:</strong> {proposal.name || 'Not set'}</p>
+                            <p><strong>Voting State:</strong> {state}</p>
+                            <p><strong>Voting Result:</strong> {proposal.optionA}: {proposal.optionACount}, {proposal.optionB}: {proposal.optionBCount}</p>
+                            <p><strong>Total Voters:</strong> {totalVoters}</p>
+                        </div>
+                    </div>
+
+                    {/* Messages */}
+                    <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">Contract Messages</h2>
+                        <div className="bg-gray-100 p-4 rounded max-h-40 overflow-y-auto">
+                            {allMessages.length > 0 ? (
+                                allMessages.map((msg, index) => (
+                                    <p
+                                        key={index}
+                                        className={`text-sm ${msg.startsWith('Error:') ? 'text-red-600' : 'text-gray-800'}`}
+                                    >
+                                        {msg}
+                                    </p>
+                                ))
+                            ) : (
+                                <p className="text-sm">No messages available</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Owner Functions */}
+                    <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">Owner Functions</h2>
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="font-medium">Set Proposal Details (Owner only)</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Proposal Name"
+                                    value={proposalName}
+                                    onChange={(e) => setProposalName(e.target.value)}
+                                    className="w-full p-2 mb-2 border rounded"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Option A"
+                                    value={optionA}
+                                    onChange={(e) => setOptionA(e.target.value)}
+                                    className="w-full p-2 mb-2 border rounded"
+                                />
+                                <input
+                                    type="text"
+                                    placeholder="Option B"
+                                    value={optionB}
+                                    onChange={(e) => setOptionB(e.target.value)}
+                                    className="w-full p-2 mb-2 border rounded"
+                                />
+                                <button
+                                    onClick={handleSetProposalDetails}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Set Proposal
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Register Voter (Owner only)</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Voter Address"
+                                    value={voterAddress}
+                                    onChange={(e) => setVoterAddress(e.target.value)}
+                                    className="w-full p-2 mb-2 border rounded"
+                                />
+                                <button
+                                    onClick={handleRegisterVoter}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Register Voter
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Start Voting (Owner only)</h3>
+                                <button
+                                    onClick={handleStartVoting}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Start Voting
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">End Voting (Owner only)</h3>
+                                <button
+                                    onClick={handleEndVoting}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    End Voting
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Restart Voting (Owner only)</h3>
+                                <button
+                                    onClick={handleRestartVoting}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Restart Voting
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Voter Functions */}
+                    <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">Voter Functions</h2>
+                        <div>
+                            <h3 className="font-medium">Commit Vote</h3>
+                            <select
+                                value={vote}
+                                onChange={(e) => setVote(e.target.value === 'true')}
+                                className="w-full p-2 mb-2 border rounded"
+                                disabled={!account}
+                            >
+                                <option value="true">{proposal.optionA || 'Option A'}</option>
+                                <option value="false">{proposal.optionB || 'Option B'}</option>
+                            </select>
+                            <button
+                                onClick={handleCommitVote}
+                                className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                disabled={!account}
+                                >
+                                Commit Vote
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* View Functions */}
+                    <div className="mb-6">
+                        <h2 className="text-xl font-semibold mb-2">View Functions</h2>
+                        <div className="space-y-4">
+                            <div>
+                                <h3 className="font-medium">Get Proposal</h3>
+                                <button
+                                    onClick={handleGetProposal}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Get Proposal
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Get State</h3>
+                                <button
+                                    onClick={handleGetState}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Get State
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Get Total Eligible Voters</h3>
+                                <button
+                                    onClick={handleGetTotalEligibleVoters}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Get Total Voters
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Is Voter Registered</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Voter Address"
+                                    value={checkVoterAddress}
+                                    onChange={(e) => setCheckVoterAddress(e.target.value)}
+                                    className="w-full p-2 mb-2 border rounded"
+                                />
+                                <button
+                                    onClick={handleIsVoterRegistered}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Check Voter Registration
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Has Voter Voted</h3>
+                                <input
+                                    type="text"
+                                    placeholder="Voter Address"
+                                    value={checkVoterAddress}
+                                    onChange={(e) => setCheckVoterAddress(e.target.value)}
+                                    className="w-full p-2 mb-2 border rounded"
+                                />
+                                <button
+                                    onClick={handleHasVoted}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Check If Voted
+                                </button>
+                            </div>
+
+                            <div>
+                                <h3 className="font-medium">Get Own Vote</h3>
+                                <button
+                                    onClick={handleGetOwnVote}
+                                    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                                    disabled={!account}
+                                >
+                                    Get Own Vote
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<VotingApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
